@@ -1,0 +1,76 @@
+name: Build Setora arm64 and arm64e
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Check out Setora
+        uses: actions/checkout@v4
+
+      - name: Set up Theos
+        uses: actions/checkout@v4
+        with:
+          repository: roothide/theos
+          path: theos
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: brew install ldid make
+
+      - name: Install iOS 15.6 SDK
+        run: |
+          curl -fL --retry 3 \
+            https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS15.6.sdk.tar.xz \
+            -o sdk.tar.xz
+          mkdir -p theos/sdks
+          tar -xJf sdk.tar.xz -C theos/sdks
+
+      - name: Build rootless package
+        env:
+          THEOS: ${{ github.workspace }}/theos
+        run: |
+          "$(brew --prefix make)/bin/gmake" clean package \
+            ARCHS="arm64 arm64e" \
+            TARGET="iphone:clang:15.6:15.0" \
+            THEOS_PACKAGE_SCHEME=rootless \
+            FINALPACKAGE=1
+
+      - name: Verify arm64e preference bundle
+        run: |
+          PREFS_BINARY="$(find .theos/_ -type f -path '*SetoraPrefs.bundle/SetoraPrefs' -print -quit)"
+          TWEAK_BINARY="$(find .theos/_ -type f -path '*DynamicLibraries/Setora.dylib' -print -quit)"
+          test -n "$PREFS_BINARY"
+          test -n "$TWEAK_BINARY"
+          file "$PREFS_BINARY" | tee BUILD-VERIFICATION.txt
+          file "$TWEAK_BINARY" | tee -a BUILD-VERIFICATION.txt
+          lipo -archs "$PREFS_BINARY" | tee -a BUILD-VERIFICATION.txt
+          lipo -archs "$TWEAK_BINARY" | tee -a BUILD-VERIFICATION.txt
+          lipo -archs "$PREFS_BINARY" | grep -q arm64e
+          lipo -archs "$TWEAK_BINARY" | grep -q arm64e
+          otool -hv -arch arm64e "$PREFS_BINARY" | tee -a BUILD-VERIFICATION.txt
+          otool -hv -arch arm64e "$PREFS_BINARY" | grep -q BUNDLE
+          find .theos/_ -type f | sort | tee -a BUILD-VERIFICATION.txt
+
+      - name: Save build provenance
+        run: |
+          xcodebuild -version > BUILD-PROVENANCE.txt
+          xcrun clang --version >> BUILD-PROVENANCE.txt
+          shasum -a 256 packages/*.deb >> BUILD-PROVENANCE.txt
+
+      - name: Upload Setora package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Setora-0.1.4-arm64-arm64e
+          path: |
+            packages/*.deb
+            BUILD-VERIFICATION.txt
+            BUILD-PROVENANCE.txt

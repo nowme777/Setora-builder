@@ -1,0 +1,9 @@
+Package: com.nowme.setora
+Name: Setora
+Version: 0.1.4
+Architecture: iphoneos-arm
+Description: Customize the iOS Settings app.
+Maintainer: nowme
+Author: nowme
+Section: Tweaks
+Depends: mobilesubstrate, preferenceloader
