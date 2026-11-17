@@ -2,7 +2,7 @@ Package: com.nowme.setora
 Name: Setora
 Version: 0.4.0
 Architecture: iphoneos-arm
-Description: Customize the iOS Settings app.
+Description: Customize the iOS 15 Settings app.
 Maintainer: nowme
 Author: nowme
 Section: Tweaks
