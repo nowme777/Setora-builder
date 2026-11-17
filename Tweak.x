@@ -1,14 +1,24 @@
 #import <CoreFoundation/CoreFoundation.h>
 #import <Foundation/Foundation.h>
-#import <Foundation/NSUserDefaults+Private.h>
 #import <UIKit/UIKit.h>
-#import <Preferences/PSListController.h>
 
-static NSString * nsDomainString = @"com.nowme.setora";
-static NSString * nsNotificationString = @"com.nowme.setora/preferences.changed";
+@interface PSUIPrefsListController : UIViewController
+@end
+
+static NSString *nsDomainString = @"com.nowme.setora";
+static NSString *nsNotificationString = @"com.nowme.setora/preferences.changed";
 static BOOL enabled;
 static NSString *customTitle;
 static NSString *textColorHex;
+
+static id STRPreferenceValue(NSString *key) {
+	CFPreferencesAppSynchronize((__bridge CFStringRef)nsDomainString);
+	CFPropertyListRef value = CFPreferencesCopyAppValue((__bridge CFStringRef)key, (__bridge CFStringRef)nsDomainString);
+	if (value) return CFBridgingRelease(value);
+
+	NSDictionary *storedPreferences = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.nowme.setora.plist"];
+	return storedPreferences[key];
+}
 
 static UIColor *STRColorFromHex(NSString *hex) {
 	if (![hex isKindOfClass:[NSString class]]) return nil;
@@ -22,30 +32,28 @@ static UIColor *STRColorFromHex(NSString *hex) {
 }
 
 static void notificationCallback(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
-	NSNumber * enabledValue = (NSNumber *)[[NSUserDefaults standardUserDefaults] objectForKey:@"enabled" inDomain:nsDomainString];
-	enabled = (enabledValue)? [enabledValue boolValue] : YES;
-	customTitle = [[NSUserDefaults standardUserDefaults] objectForKey:@"customTitle" inDomain:nsDomainString];
-	textColorHex = [[NSUserDefaults standardUserDefaults] objectForKey:@"textColor" inDomain:nsDomainString];
+	NSNumber *enabledValue = STRPreferenceValue(@"enabled");
+	enabled = enabledValue ? [enabledValue boolValue] : YES;
+	customTitle = STRPreferenceValue(@"customTitle");
+	textColorHex = STRPreferenceValue(@"textColor");
 }
 
-%hook PSListController
+%hook PSUIPrefsListController
 
 - (void)viewWillAppear:(BOOL)animated {
 	%orig;
 	if (!enabled || customTitle.length == 0) return;
-	if (self.navigationController.viewControllers.firstObject == self) {
-		self.title = customTitle;
-		self.navigationItem.title = customTitle;
-	}
+	self.title = customTitle;
+	self.navigationItem.title = customTitle;
 }
 
 %end
 
 %hook UITableViewCell
 
-- (void)didMoveToWindow {
+- (void)layoutSubviews {
 	%orig;
-	if (!enabled || !self.window) return;
+	if (!enabled) return;
 	UIColor *color = STRColorFromHex(textColorHex);
 	if (!color) return;
 	self.textLabel.textColor = color;
@@ -55,12 +63,6 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
 %end
 
 %ctor {
-	// Set variables on start up
 	notificationCallback(NULL, NULL, NULL, NULL, NULL);
-
-	// Register for 'PostNotification' notifications
-	CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, notificationCallback, (CFStringRef)nsNotificationString, NULL, CFNotificationSuspensionBehaviorCoalesce);
-
-	// Add any personal initializations
-
+	CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, notificationCallback, (__bridge CFStringRef)nsNotificationString, NULL, CFNotificationSuspensionBehaviorCoalesce);
 }
