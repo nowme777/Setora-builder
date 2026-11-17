@@ -1,8 +1,6 @@
 name: Build Setora arm64 and arm64e
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -44,20 +42,20 @@ jobs:
             THEOS_PACKAGE_SCHEME=rootless \
             FINALPACKAGE=1
 
-      - name: Verify arm64e preference bundle
+      - name: Verify native arm64e tweak
         run: |
-          PREFS_BINARY="$(find .theos/_ -type f -path '*SetoraPrefs.bundle/SetoraPrefs' -print -quit)"
           TWEAK_BINARY="$(find .theos/_ -type f -path '*DynamicLibraries/Setora.dylib' -print -quit)"
-          test -n "$PREFS_BINARY"
           test -n "$TWEAK_BINARY"
-          file "$PREFS_BINARY" | tee BUILD-VERIFICATION.txt
-          file "$TWEAK_BINARY" | tee -a BUILD-VERIFICATION.txt
-          lipo -archs "$PREFS_BINARY" | tee -a BUILD-VERIFICATION.txt
+          file "$TWEAK_BINARY" | tee BUILD-VERIFICATION.txt
           lipo -archs "$TWEAK_BINARY" | tee -a BUILD-VERIFICATION.txt
-          lipo -archs "$PREFS_BINARY" | grep -q arm64e
           lipo -archs "$TWEAK_BINARY" | grep -q arm64e
-          otool -hv -arch arm64e "$PREFS_BINARY" | tee -a BUILD-VERIFICATION.txt
-          otool -hv -arch arm64e "$PREFS_BINARY" | grep -q BUNDLE
+          otool -hv -arch arm64e "$TWEAK_BINARY" | tee -a BUILD-VERIFICATION.txt
+          otool -hv -arch arm64e "$TWEAK_BINARY" | grep -q DYLIB
+          test -f .theos/_/var/jb/Library/PreferenceLoader/Preferences/Setora/Setora.plist
+          if find .theos/_ -type f -path '*SetoraPrefs.bundle/*' | grep -q .; then
+            echo 'Unexpected executable preference bundle found' >&2
+            exit 1
+          fi
           find .theos/_ -type f | sort | tee -a BUILD-VERIFICATION.txt
 
       - name: Save build provenance
@@ -69,7 +67,7 @@ jobs:
       - name: Upload Setora package
         uses: actions/upload-artifact@v4
         with:
-          name: Setora-0.1.4-arm64-arm64e
+          name: Setora-0.4.0-arm64-arm64e
           path: |
             packages/*.deb
             BUILD-VERIFICATION.txt
